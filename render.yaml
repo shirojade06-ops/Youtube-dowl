@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     autoDeployTrigger: commit
-    buildCommand: apt-get update && apt-get install -y ffmpeg && pip install --upgrade pip && pip install -r backend/requirements.txt && pip install -U yt-dlp
+    buildCommand: python install_ffmpeg.py && pip install --upgrade pip && pip install -r backend/requirements.txt && pip install -U yt-dlp
     startCommand: gunicorn backend.main:app -k uvicorn.workers.UvicornWorker -w 1 --timeout 300 --graceful-timeout 60 --bind 0.0.0.0:${PORT}
     healthCheckPath: /
     envVars:
