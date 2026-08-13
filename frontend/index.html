@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TubeFetch — Descarga videos de YouTube</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid-overlay"></div>
+  </div>
+
+  <main class="app">
+    <header class="hero">
+      <div class="logo">
+        <div class="play-icon">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+        <h1>Tube<span>Fetch</span></h1>
+      </div>
+      <p class="tagline">Descarga tus videos favoritos de YouTube al instante</p>
+    </header>
+
+    <section class="card url-card">
+      <form id="urlForm" class="url-form" autocomplete="off">
+        <div class="input-wrap">
+          <svg class="link-icon" viewBox="0 0 24 24">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <input type="url" id="urlInput" placeholder="Pega la URL del video de YouTube..." required>
+          <button type="submit" class="btn analyze-btn" id="analyzeBtn">
+            <span class="btn-label">Analizar</span>
+            <span class="spinner"></span>
+          </button>
+        </div>
+      </form>
+      <div class="error-banner" id="errorBanner"></div>
+    </section>
+
+    <section class="card preview-card" id="previewCard" hidden>
+      <div class="preview-media">
+        <img id="thumb" alt="Miniatura del video">
+        <div class="duration-badge" id="durationBadge"></div>
+      </div>
+      <div class="preview-body">
+        <h2 id="videoTitle"></h2>
+        <div class="meta-row"><span class="channel" id="channel"></span></div>
+        <div class="quality-picker">
+          <span class="picker-label">Calidad</span>
+          <div class="chips" id="qualityChips"></div>
+        </div>
+        <button class="btn download-btn" id="downloadBtn">
+          <svg viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Descargar</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="card progress-card" id="progressCard" hidden>
+      <div class="progress-head">
+        <div>
+          <h3 id="progressTitle">Descargando...</h3>
+          <span class="status-badge active" id="statusBadge">Descargando</span>
+        </div>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="bar">
+        <div class="bar-fill" id="barFill"></div>
+        <div class="shimmer"></div>
+      </div>
+      <div class="progress-meta">
+        <span id="speed"></span>
+        <span id="eta"></span>
+      </div>
+      <div class="done-actions" id="doneActions" hidden>
+        <a class="btn save-btn" id="saveBtn" href="#" hidden>Guardar archivo</a>
+      </div>
+    </section>
+
+    <section class="card list-card">
+      <h3 class="list-title">Descargas recientes</h3>
+      <div class="list" id="downloadList"></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
