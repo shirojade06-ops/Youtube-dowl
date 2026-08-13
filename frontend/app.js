@@ -166,6 +166,9 @@ function setStatus(kind, label) {
 
 function updateProgressUI(s) {
   els.progressTitle.textContent = s.title || "Descargando...";
+  if (s.attempt > 1) {
+    els.progressTitle.textContent += ` · Intento ${s.attempt}/8`;
+  }
   els.progressPct.textContent = `${Math.round(s.progress)}%`;
   els.barFill.style.width = `${Math.min(s.progress, 100)}%`;
   els.speed.textContent = s.speed ? `Velocidad: ${s.speed}` : "";

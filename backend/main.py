@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shutil
 import threading
 import uuid
 from pathlib import Path
@@ -30,16 +31,29 @@ app.add_middleware(
 
 downloads: dict[str, dict] = {}
 
-QUALITY_FORMATS = {
-    "best": "bestvideo*+bestaudio/best",
-    "2160": "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best",
-    "1440": "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best",
-    "1080": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-    "720": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-    "480": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
-    "360": "bestvideo[height<=360]+bestaudio/best[height<=360]/best",
-    "audio": "bestaudio/best",
-}
+DOWNLOAD_PROFILES = [
+    {"impersonate": "chrome"},
+    {"extractor_args": {"youtube": {"player_client": ["tv", "android"]}}},
+    {"extractor_args": {"youtube": {"player_client": ["web_embedded"]}}},
+    {"extractor_args": {"youtube": {"player_client": ["ios"]}}},
+]
+
+
+def _friendly_error(msg: str) -> str:
+    low = msg.lower()
+    if "403" in msg or "forbidden" in low:
+        return "YouTube bloqueó la descarga desde este servidor (error 403). Suele ser temporal; intenta de nuevo en unos minutos o prueba otro video."
+    if "ffmpeg is not installed" in low:
+        return "Falta ffmpeg para combinar video y audio. Prueba con una calidad más baja o solo audio."
+    if "private video" in low or "sign in" in low and "to confirm" in low:
+        return "El video es privado o requiere iniciar sesión para verse."
+    if "age" in low and ("restrict" in low or "confirm" in low):
+        return "El video tiene restricción de edad y no puede descargarse desde el servidor."
+    if "unavailable" in low or "not available" in low:
+        return "El video no está disponible (fue eliminado, es una transmisión en vivo o está restringido)."
+    if "po token" in low or "bot" in low:
+        return "YouTube detectó actividad automatizada (PO Token / verificación de bot). Intenta de nuevo más tarde."
+    return msg
 
 
 class InfoRequest(BaseModel):
@@ -59,6 +73,9 @@ def get_info(req: InfoRequest):
             info = ydl.extract_info(req.url, download=False)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    if info.get("_type") == "playlist" and info.get("entries"):
+        info = info["entries"][0]
 
     heights = sorted(
         {
@@ -111,39 +128,87 @@ def _progress_hook(state: dict, d: dict):
         state["progress"] = 100.0
 
 
+def _format_selectors(quality: str) -> list[str]:
+    if quality == "audio":
+        return ["bestaudio/best"]
+    if quality == "best":
+        return ["bestvideo*+bestaudio/best", "best"]
+    h = int(quality) if quality.isdigit() else 1080
+    return [
+        f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best",
+        f"best[height<={h}]/best",
+    ]
+
+
 def _run_download(dl_id: str, url: str, quality: str):
     state = downloads[dl_id]
     is_audio = quality == "audio"
-    try:
-        opts = {
-            "outtmpl": str(DOWNLOADS_DIR / "%(title)s [%(id)s].%(ext)s"),
-            "format": QUALITY_FORMATS.get(quality, QUALITY_FORMATS["best"]),
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
-            "progress_hooks": [lambda d, s=state: _progress_hook(s, d)],
-        }
-        if FFMPEG_LOCATION:
-            opts["ffmpeg_location"] = FFMPEG_LOCATION
-        if is_audio:
-            opts["postprocessors"] = [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
-            ]
-        else:
-            opts["merge_output_format"] = "mp4"
+    ffmpeg_ok = bool(FFMPEG_LOCATION) or shutil.which("ffmpeg") is not None
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            state["title"] = info.get("title", state["title"])
-            path = Path(ydl.prepare_filename(info))
-            if path.suffix in (".webm", ".m4a", ".mkv", ".opus", ".mp4"):
-                path = path.with_suffix(".mp4" if not is_audio else ".mp3")
-            state["filename"] = path.name
-        state["status"] = "done"
-        state["progress"] = 100.0
-    except Exception as exc:
-        state["status"] = "error"
-        state["error"] = str(exc)
+    selectors = _format_selectors(quality)
+    if not ffmpeg_ok and not is_audio:
+        selectors = [s for s in selectors if "+bestaudio" not in s]
+
+    errors: list[str] = []
+    for profile in DOWNLOAD_PROFILES:
+        for fmt in selectors:
+            if state["status"] == "error":
+                return
+            state["status"] = "downloading"
+            state["progress"] = 0.0
+            state["speed"] = ""
+            state["eta"] = ""
+            state["attempt"] = len(errors) + 1
+            opts = {
+                "outtmpl": str(DOWNLOADS_DIR / "%(title)s [%(id)s].%(ext)s"),
+                "format": fmt,
+                "quiet": True,
+                "no_warnings": True,
+                "noprogress": True,
+                "noplaylist": True,
+                "socket_timeout": 30,
+                "retries": 2,
+                "fragment_retries": 2,
+                "extractor_retries": 1,
+                "progress_hooks": [lambda d, s=state: _progress_hook(s, d)],
+                **profile,
+            }
+            if FFMPEG_LOCATION:
+                opts["ffmpeg_location"] = FFMPEG_LOCATION
+            if is_audio:
+                opts["postprocessors"] = [
+                    {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
+                ]
+            else:
+                opts["merge_output_format"] = "mp4"
+
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                if info.get("_type") == "playlist" and info.get("entries"):
+                    info = info["entries"][0]
+                state["title"] = info.get("title", state["title"])
+                path = Path(ydl.prepare_filename(info))
+                if path.suffix in (".webm", ".m4a", ".mkv", ".opus", ".mp4"):
+                    path = path.with_suffix(".mp4" if not is_audio else ".mp3")
+                state["filename"] = path.name
+                state["status"] = "done"
+                state["progress"] = 100.0
+                return
+            except Exception as exc:
+                err = str(exc)
+                errors.append(err)
+                low = err.lower()
+                if "ffmpeg is not installed" in low:
+                    break
+                if "unable to download video data" in low and "403" not in err:
+                    break
+                if "format is not available" in low and fmt == selectors[-1]:
+                    break
+                continue
+
+    state["status"] = "error"
+    state["error"] = _friendly_error(errors[-1] if errors else "Error desconocido")
 
 
 @app.post("/api/download")
@@ -157,6 +222,7 @@ def start_download(req: DownloadRequest):
         "progress": 0.0,
         "speed": "",
         "eta": "",
+        "attempt": 0,
         "error": "",
     }
     downloads[dl_id] = state
