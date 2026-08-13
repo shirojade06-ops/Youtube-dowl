@@ -40,3 +40,20 @@ Los archivos descargados se guardan en `backend/downloads/`.
 
 - La descarga depende de la disponibilidad de formatos del video (algunos videos de gran calidad no ofrecen separación video/audio).
 - yt-dlp se actualiza con frecuencia; si algo deja de funcionar, ejecuta `pip install -U yt-dlp`.
+
+## Desplegar en Render
+
+El repositorio incluye un `render.yaml` (Blueprint) que Render detecta automáticamente.
+
+1. Entra a https://dashboard.render.com
+2. **New → Blueprint** y conecta tu repositorio de GitHub
+3. Render detecta el archivo `render.yaml` y crea el servicio **tubefetch**
+4. Pulsa **Apply** / **Deploy**
+
+Notas del despliegue:
+
+- **ffmpeg** se instala automáticamente en el build (`apt-get install ffmpeg`).
+- **yt-dlp** se actualiza en cada despliegue.
+- En el plan gratuito, la instancia se duerme tras 15 min sin uso y despierta con la primera petición (puede tardar unos segundos).
+- El sistema de archivos es efímero: las descargas se guardan mientras la instancia esté activa y se pierden al redesplegar. Si quieres persistencia, usa el disco persistente de Render o un bucket (S3/R2) como almacenamiento.
+
