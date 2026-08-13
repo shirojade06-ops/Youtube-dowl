@@ -41,6 +41,17 @@ Los archivos descargados se guardan en `backend/downloads/`.
 - La descarga depende de la disponibilidad de formatos del video (algunos videos de gran calidad no ofrecen separación video/audio).
 - yt-dlp se actualiza con frecuencia; si algo deja de funcionar, ejecuta `pip install -U yt-dlp`.
 
+## Si YouTube pide "confirmar que no eres un bot"
+
+YouTube bloquea las IPs de servidores. La solución es subir cookies de tu sesión real:
+
+1. En Chrome/Firefox instala la extensión **"Get cookies.txt LOCALLY"**
+2. Inicia sesión en YouTube y exporta las cookies a un archivo `.txt`
+3. En la app pulsa **"¿YouTube pide confirmar que no eres un bot? Configura cookies"** y sube el archivo
+4. Las cookies se guardan en `backend/cookies.txt` (no se suben al repositorio). Bórralas cuando termines (botón "Quitar cookies").
+
+Nota: en Render el filesystem es efímero; tendrás que subir las cookies de nuevo tras cada redeploy.
+
 ## Desplegar en Render
 
 El repositorio incluye un `render.yaml` (Blueprint) que Render detecta automáticamente.

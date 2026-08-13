@@ -40,6 +40,24 @@
         </div>
       </form>
       <div class="error-banner" id="errorBanner"></div>
+      <button type="button" class="cookies-toggle" id="toggleCookies">¿YouTube pide confirmar que no eres un bot? Configura cookies</button>
+      <div class="cookies-panel" id="cookiesPanel">
+        <div class="cookies-head">
+          <h3>Cookies de YouTube</h3>
+          <span class="status-badge off" id="cookiesStatus">No configuradas</span>
+        </div>
+        <p class="hint">
+          Exporta tus cookies de YouTube con la extensión "Get cookies.txt LOCALLY" (debe estar iniciada tu
+          sesión en YouTube) y sube el archivo. Se usarán para autenticar las descargas.
+        </p>
+        <div>
+          <label class="btn upload-btn">
+            Subir cookies.txt
+            <input type="file" id="cookiesFile" accept=".txt" hidden>
+          </label>
+          <button type="button" class="btn ghost-btn" id="removeCookies" hidden>Quitar cookies</button>
+        </div>
+      </div>
     </section>
 
     <section class="card preview-card" id="previewCard" hidden>

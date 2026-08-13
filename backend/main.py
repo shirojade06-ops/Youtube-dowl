@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 import yt_dlp
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +18,17 @@ DOWNLOADS_DIR.mkdir(exist_ok=True)
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 TOOLS_DIR = BASE_DIR.parent / "tools"
 FFMPEG_LOCATION = str(TOOLS_DIR) if (TOOLS_DIR / "ffmpeg").exists() else None
+COOKIES_FILE = BASE_DIR / "cookies.txt"
+
+
+def _cookies_active() -> bool:
+    return COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0
+
+
+def _cookies_opt(opts: dict) -> dict:
+    if _cookies_active():
+        opts["cookiefile"] = str(COOKIES_FILE)
+    return opts
 
 app = FastAPI(title="TubeFetch - Descargador de YouTube")
 
@@ -68,6 +79,7 @@ class DownloadRequest(BaseModel):
 @app.post("/api/info")
 def get_info(req: InfoRequest):
     opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    _cookies_opt(opts)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
@@ -175,6 +187,7 @@ def _run_download(dl_id: str, url: str, quality: str):
             }
             if FFMPEG_LOCATION:
                 opts["ffmpeg_location"] = FFMPEG_LOCATION
+            _cookies_opt(opts)
             if is_audio:
                 opts["postprocessors"] = [
                     {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
@@ -251,6 +264,34 @@ async def progress_stream(dl_id: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/cookies")
+def cookies_status():
+    return {"active": _cookies_active()}
+
+
+@app.post("/api/cookies")
+async def upload_cookies(request: Request):
+    body = await request.body()
+    text = body.decode("utf-8", errors="replace").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+    lines = [ln for ln in text.splitlines() if ln and not ln.startswith("#")]
+    if not any(len(ln.split("\t")) == 7 for ln in lines):
+        raise HTTPException(
+            status_code=400,
+            detail="Formato inválido. Exporta las cookies en formato Netscape (por ejemplo con la extensión 'Get cookies.txt LOCALLY', con sesión iniciada en YouTube).",
+        )
+    COOKIES_FILE.write_text(text + "\n", encoding="utf-8")
+    return {"active": True}
+
+
+@app.delete("/api/cookies")
+def clear_cookies():
+    if COOKIES_FILE.exists():
+        COOKIES_FILE.unlink()
+    return {"active": False}
 
 
 @app.get("/api/downloads")

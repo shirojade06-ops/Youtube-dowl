@@ -217,7 +217,65 @@ function finalizeDone(s) {
   els.doneActions.hidden = false;
   showToast("¡Descarga completada!");
   resetDownloadButton();
-  loadDownloads();
+loadDownloads();
+
+/* ---------- Cookies ---------- */
+const cookies = {
+  toggle: $("#toggleCookies"),
+  panel: $("#cookiesPanel"),
+  file: $("#cookiesFile"),
+  status: $("#cookiesStatus"),
+  remove: $("#removeCookies"),
+};
+
+async function refreshCookiesStatus() {
+  try {
+    const res = await fetch("/api/cookies");
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    setCookiesStatus(d.active);
+  } catch {
+    setCookiesStatus(false);
+  }
+}
+
+function setCookiesStatus(active) {
+  cookies.status.textContent = active ? "Activas" : "No configuradas";
+  cookies.status.className = "status-badge " + (active ? "ok" : "off");
+  cookies.remove.hidden = !active;
+}
+
+cookies.toggle.addEventListener("click", () => cookies.panel.classList.toggle("show"));
+
+cookies.file.addEventListener("change", async () => {
+  const f = cookies.file.files[0];
+  if (!f) return;
+  try {
+    const res = await fetch("/api/cookies", { method: "POST", body: f });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.detail || "No se pudieron guardar las cookies.");
+    await refreshCookiesStatus();
+    cookies.panel.classList.remove("show");
+    showToast("Cookies guardadas. Vuelve a intentar la descarga.");
+  } catch (err) {
+    showToast(err.message, true);
+  }
+  cookies.file.value = "";
+});
+
+cookies.remove.addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/cookies", { method: "DELETE" });
+    if (res.ok) {
+      await refreshCookiesStatus();
+      showToast("Cookies eliminadas.");
+    }
+  } catch {
+    /* ignora */
+  }
+});
+
+refreshCookiesStatus();
 }
 
 function finalizeError(s) {
